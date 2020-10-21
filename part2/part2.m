@@ -43,11 +43,13 @@ Nrdot = -2.4283e10;
 MA = -[ Xudot 0    0 
         0 Yvdot Yrdot
         0 Nvdot Nrdot ];
+MA = MA(2:3,2:3);
 
 % rigid-body mass matrix
 MRB = [ m 0    0 
         0 m    m*xg
         0 m*xg Iz ];
+MRB = MRB(2:3,2:3);
     
 Minv = inv(MRB + MA); % Added mass is included to give the total inertia
 
@@ -71,6 +73,20 @@ Xu = -(m - Xudot) / T1;
 Yv = -(m - Yvdot) / T2;
 Nr = -(Iz - Nrdot)/ T6;
 D = diag([-Xu -Yv -Nr]);         % zero speed linear damping
+D = D(2:3,2:3);
+
+%Linearized coriolis matrices
+CRB = [ 0 0 0 
+    0  0  m*U_d
+    0 0  m*xg*U_d];
+CRB = CRB(2:3,2:3);
+% coriolis due to added mass
+CA = [  0   0   0
+        0   0   -Xudot*U_d 
+      0    (Xudot-Yvdot)*U_d -Yrdot*U_d];
+CA = CA(2:3,2:3);
+
+N = CRB + CA + D;
 
 % rudder coefficients (Section 9.5)
 b = 2;
@@ -92,7 +108,10 @@ N_delta = 0.25 * (xR + aH*xH) * rho * AR * CN;
 Bu = @(u_r,delta) [ (1-t_thr)  -u_r^2 * X_delta2 * delta
                         0      -u_r^2 * Y_delta
                         0      -u_r^2 * N_delta            ];
-                    
+b_delta = [-Y_delta; -N_delta];
+%2c: tf
+[NUM,DEN] = ss2tf(-Minv*N,Minv*b_delta,[0 1],0,2);
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                    
 % Heading Controller
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -140,17 +159,6 @@ for i=1:Ns+1
         Nwind = 0;
     end
     tau_env = [0 Ywind Nwind]';
-    
-    % state-dependent time-varying matrices
-    CRB = m * nu(3) * [ 0 -1 -xg 
-                        1  0  0 
-                        xg 0  0  ];
-                    
-    % coriolis due to added mass
-    CA = [  0   0   Yvdot * nu_r(2) + Yrdot * nu_r(3)
-            0   0   -Xudot * nu_r(1) 
-          -Yvdot * nu_r(2) - Yrdot * nu_r(3)    Xudot * nu_r(1)   0];
-    N = CRB + CA + D;
     
     % nonlinear surge damping
     Rn = L/visc * abs(nu_r(1));
