@@ -43,13 +43,13 @@ Nrdot = -2.4283e10;
 MA = -[ Xudot 0    0 
         0 Yvdot Yrdot
         0 Nvdot Nrdot ];
-MA = MA(2:3,2:3);
+%MA = MA(2:3,2:3);
 
 % rigid-body mass matrix
 MRB = [ m 0    0 
         0 m    m*xg
         0 m*xg Iz ];
-MRB = MRB(2:3,2:3);
+%MRB = MRB(2:3,2:3);
     
 Minv = inv(MRB + MA); % Added mass is included to give the total inertia
 
@@ -73,18 +73,18 @@ Xu = -(m - Xudot) / T1;
 Yv = -(m - Yvdot) / T2;
 Nr = -(Iz - Nrdot)/ T6;
 D = diag([-Xu -Yv -Nr]);         % zero speed linear damping
-D = D(2:3,2:3);
+%D = D(2:3,2:3);
 
 %Linearized coriolis matrices
 CRB = [ 0 0 0 
     0  0  m*U_d
     0 0  m*xg*U_d];
-CRB = CRB(2:3,2:3);
+%CRB = CRB(2:3,2:3);
 % coriolis due to added mass
 CA = [  0   0   0
         0   0   -Xudot*U_d 
       0    (Xudot-Yvdot)*U_d -Yrdot*U_d];
-CA = CA(2:3,2:3);
+%CA = CA(2:3,2:3);
 
 N = CRB + CA + D;
 
@@ -110,7 +110,7 @@ Bu = @(u_r,delta) [ (1-t_thr)  -u_r^2 * X_delta2 * delta
                         0      -u_r^2 * N_delta            ];
 b_delta = [-Y_delta; -N_delta];
 %2c: tf
-[NUM,DEN] = ss2tf(-Minv*N,Minv*b_delta,[0 1],0,2);
+%[NUM,DEN] = ss2tf(-Minv*N,Minv*b_delta,[0 1],0);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                    
 % Heading Controller
@@ -120,7 +120,13 @@ b_delta = [-Y_delta; -N_delta];
 wb = 0.06;
 zeta = 1;
 wn = 1 / sqrt( 1 - 2*zeta^2 + sqrt( 4*zeta^4 - 4*zeta^2 + 2) ) * wb;
-
+K_nomoto = 0.0439;
+T_nomoto = 168.2;
+m_reg = T_nomoto/K_nomoto;
+d_reg = 1/K_nomoto;
+Kp = m_reg*wn^2;
+Kd = 2*zeta*wn*m_reg;
+Ki = wn/10*Kp;
 % linearized sway-yaw model (see (7.15)-(7.19) in Fossen (2021)) used
 % for controller design. The code below should be modified.
 N_lin = [];
@@ -130,13 +136,19 @@ b_lin = [-2*U_d*Y_delta -2*U_d*N_delta]';
 eta = [0 0 0]';
 nu  = [0.1 0 0]';
 delta = 0;
+wn_ref = 0.3;
 n = 0;
+xd = [0 0 0]';
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % MAIN LOOP
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 simdata = zeros(Ns+1,17);                % table of simulation data
 for i=1:Ns+1
-
+    Ad = [ 0 1 0
+           0 0 1
+           -wn_ref^3  -3*wn_ref^2  -3*wn_ref ];
+    Bd = [ 0 0 wn_ref^3 ]';
+    xd_dot = Ad * xd + Bd * psi_ref;    
     t = (i-1) * h;                      % time (s)
     R = Rzyx(0,0,eta(3));
     
@@ -188,7 +200,7 @@ for i=1:Ns+1
     thr = rho * Dia^4 * KT * abs(n) * n;    % thrust command (N)
         
     % control law
-    delta_c = 0.1;              % rudder angle command (rad)
+    delta_c = Kp*;              % rudder angle command (rad)
     
     % ship dynamics
     u = [ thr delta ]';
