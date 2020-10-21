@@ -139,11 +139,17 @@ delta = 0;
 wn_ref = 0.3;
 n = 0;
 xd = [0 0 0]';
+cum_error = 0;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % MAIN LOOP
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 simdata = zeros(Ns+1,17);                % table of simulation data
 for i=1:Ns+1
+    if(i/10 > 500)
+        psi_ref = -20*pi/180;
+    else
+        psi_ref = 10*pi/180;
+    end
     Ad = [ 0 1 0
            0 0 1
            -wn_ref^3  -3*wn_ref^2  -3*wn_ref ];
@@ -193,14 +199,15 @@ for i=1:Ns+1
     
     % reference models
     psi_d = psi_ref;
+    
     r_d = 0;
     u_d = U_d;
-    
+   
     % thrust 
     thr = rho * Dia^4 * KT * abs(n) * n;    % thrust command (N)
         
     % control law
-    delta_c = Kp*;              % rudder angle command (rad)
+    delta_c = -(Kp*(eta(3)-xd(1)) + Ki*cum_error +  Kd*(nu(3)-xd(2)) ) ;              % rudder angle command (rad)
     
     % ship dynamics
     u = [ thr delta ]';
@@ -229,8 +236,9 @@ for i=1:Ns+1
     eta = euler2(eta_dot,eta,h);
     nu  = euler2(nu_dot,nu,h);
     delta = euler2(delta_dot,delta,h);   
-    n  = euler2(n_dot,n,h);    
-    
+    n  = euler2(n_dot,n,h);
+    cum_error = euler2(eta(3)-xd(1),cum_error,h);
+    xd = euler2(xd_dot,xd,h);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
