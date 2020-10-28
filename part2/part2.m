@@ -5,7 +5,6 @@
 
 clear all;
 clc;
-close all;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % USER INPUTS
@@ -44,15 +43,16 @@ Nrdot = -2.4283e10;
 MA = -[ Xudot 0    0 
         0 Yvdot Yrdot
         0 Nvdot Nrdot ];
-%MA = MA(2:3,2:3);
+MA_lin = MA(2:3,2:3);
 
 % rigid-body mass matrix
 MRB = [ m 0    0 
         0 m    m*xg
         0 m*xg Iz ];
-%MRB = MRB(2:3,2:3);
+MRB_lin = MRB(2:3,2:3);
     
 Minv = inv(MRB + MA); % Added mass is included to give the total inertia
+Minv_lin = inv(MRB_lin + MA_lin);
 
 % ocean current in NED
 Vc = 1;                             % current speed (m/s)
@@ -74,20 +74,18 @@ Xu = -(m - Xudot) / T1;
 Yv = -(m - Yvdot) / T2;
 Nr = -(Iz - Nrdot)/ T6;
 D = diag([-Xu -Yv -Nr]);         % zero speed linear damping
-%D = D(2:3,2:3);
+D_lin = D(2:3,2:3);
 
 %Linearized coriolis matrices
-CRB = [ 0 0 0 
+CRB_lin = [ 0 0 0 
     0  0  m*U_d
     0 0  m*xg*U_d];
-%CRB = CRB(2:3,2:3);
+CRB_lin = CRB_lin(2:3,2:3);
 % coriolis due to added mass
-CA = [  0   0   0
+CA_lin = [  0   0   0
         0   0   -Xudot*U_d 
       0    (Xudot-Yvdot)*U_d -Yrdot*U_d];
-%CA = CA(2:3,2:3);
-
-N = CRB + CA + D;
+CA_lin = CA_lin(2:3,2:3);
 
 % rudder coefficients (Section 9.5)
 b = 2;
@@ -110,31 +108,28 @@ Bu = @(u_r,delta) [ (1-t_thr)  -u_r^2 * X_delta2 * delta
                         0      -u_r^2 * Y_delta
                         0      -u_r^2 * N_delta            ];
 
+% linearized sway-yaw model (see (7.15)-(7.19) in Fossen (2021)) used
+% for controller design. The code below should be modified.
+N_lin = CRB_lin + CA_lin + D_lin;
+b_lin = [-2*U_d*Y_delta -2*U_d*N_delta]';
+%2c: tf
+[NUM,DEN] = ss2tf(-Minv_lin*N_lin,Minv_lin*b_lin,[0 1],0);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                    
 % Heading Controller
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% for controller design. The code below should be modified.
-N_lin = [];
-b_lin = [-2*U_d*Y_delta -2*U_d*N_delta]';
-[NUM,DEN] = ss2tf(-Minv(2:3,2:3)*N(2:3,2:3),Minv(2:3,2:3)*b_lin,[0 1],0);
-
-
 % rudder control law
 wb = 0.06;
 zeta = 1;
 wn = 1 / sqrt( 1 - 2*zeta^2 + sqrt( 4*zeta^4 - 4*zeta^2 + 2) ) * wb;
-K_nomoto = 0.0075; %NUM(3)/DEN(3)
-T_nomoto = 168.2;
+K_nomoto = NUM(3)/DEN(3);
+T_nomoto = DEN(2)/DEN(3) - NUM(2)/(K_nomoto*DEN(3));%168.2;
 m_reg = T_nomoto/K_nomoto;
 d_reg = 1/K_nomoto;
 Kp = m_reg*wn^2;
 Kd = 2*zeta*wn*m_reg;
 Ki = wn/10*Kp;
-% linearized sway-yaw model (see (7.15)-(7.19) in Fossen (2021)) used
-
-
 
 % initial states
 eta = [0 0 0]';
@@ -144,8 +139,6 @@ wn_ref = 0.3;
 n = 0;
 xd = [0 0 0]';
 cum_error = 0;
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % MAIN LOOP
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -184,6 +177,17 @@ for i=1:Ns+1
     end
     tau_env = [0 Ywind Nwind]';
     
+    % state-dependent time-varying matrices
+    CRB = m * nu(3) * [ 0 -1 -xg 
+                        1  0  0 
+                        xg 0  0  ];
+                    
+    % coriolis due to added mass
+    CA = [  0   0   Yvdot * nu_r(2) + Yrdot * nu_r(3)
+            0   0   -Xudot * nu_r(1) 
+          -Yvdot * nu_r(2) - Yrdot * nu_r(3)    Xudot * nu_r(1)   0];
+    N = CRB + CA + D;
+    
     % nonlinear surge damping
     Rn = L/visc * abs(nu_r(1));
     Cf = 0.075 / ( (log(Rn) - 2)^2 + eps);
@@ -205,7 +209,6 @@ for i=1:Ns+1
     
     % reference models
     psi_d = xd(1);
-    
     r_d = xd(2);
     u_d = U_d;
    
@@ -213,7 +216,7 @@ for i=1:Ns+1
     thr = rho * Dia^4 * KT * abs(n) * n;    % thrust command (N)
         
     % control law
-    delta_c = -(Kp*ssa(eta(3)-xd(1)) + Ki*cum_error +  Kd*ssa(nu(3)-xd(2)) ) ;              % rudder angle command (rad)
+    delta_c = -(Kp*(eta(3)-xd(1)) + Ki*cum_error +  Kd*(nu(3)-xd(2)) ) ;              % rudder angle command (rad)
     
     % ship dynamics
     u = [ thr delta ]';
@@ -274,9 +277,12 @@ title('North-East positions (m)'); xlabel('time (s)');
 subplot(312)
 plot(t,psi,t,psi_d,'linewidth',2);
 title('Actual and desired yaw angles (deg)'); xlabel('time (s)');
+legend('yaw', 'desired yaw');
+
 subplot(313)
 plot(t,r,t,r_d,'linewidth',2);
 title('Actual and desired yaw rates (deg/s)'); xlabel('time (s)');
+legend('r', 'desired r');
 
 figure(2)
 figure(gcf)
@@ -322,5 +328,3 @@ plot(t, beta, 'linewidth',2);grid on; hold on
 plot(t, betaC, 'linewidth',2);
 legend('sideslip','crabbie');
 title('1b');
-
-
