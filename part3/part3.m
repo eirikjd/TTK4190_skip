@@ -13,7 +13,8 @@ h  = 0.1;    % sampling time [s]
 Ns = 10000;  % no. of samples
 
 psi_ref = 10 * pi/180;  % desired yaw angle (rad)
-U_d = 7;                % desired cruise speed (m/s)
+%U_d = 7;                % desired cruise speed (m/s)
+U_d = 9;                % desired cruise speed (m/s)
                
 % ship parameters 
 m = 17.0677e6;          % mass (kg)
@@ -135,7 +136,7 @@ Ki = wn/10*Kp;
 eta = [0 0 0]';
 nu  = [0.1 0 0]';
 delta = 0;
-wn_ref = 0.3;
+wn_ref = 0.03;
 n = 0;
 xd = [0 0 0]';
 cum_error = 0;
@@ -147,10 +148,11 @@ AEAO = 0.65;
 z = 4;
 [KT,KQ] = wageningen(Ja,PD,AEAO,z);
 
-D_prop = 5;
+Qm = 0;
 
-T_prop = rho *D_prop^4*KT*n*abs(n);
-Q_prop = rho *D_prop^4*KQ*n*abs(n);
+t_T = 0.05;
+
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % MAIN LOOP
@@ -172,6 +174,7 @@ for i=1:Ns+1
     
     % current (should be added here)
     nu_r = nu - [Vc*cos(betaVc), Vc*sin(betaVc), 0]' ;
+    u_c = Vc*cos(betaVc);
   
     
     gamma_w = eta(3)-betaVw-pi;
@@ -247,10 +250,24 @@ for i=1:Ns+1
         delta_dot = sign(delta_dot)*Ddelta_max;
     end    
     
+    
+    
     % propeller dynamics
     Im = 100000; Tm = 10; Km = 0.6;         % propulsion parameters
+    %Hs = Km / (Tm*s+1);
     n_c = 10;                               % propeller speed (rps)
-    n_dot = (1/10) * (n_c - n);             % should be changed in Part 3
+    
+    %prop control
+    T_prop = rho *Dia^4*KT*n*abs(n);
+    Q = rho *Dia^5*KQ*n*abs(n);
+    T_d = (U_d-u_c)*Xu / (t_T-1); % t = i?
+    n_d = sign(T_d)*sqrt(abs(T_d) / (rho*Dia^4*KT));
+    Q_d = rho *Dia^5*KQ*n_d*abs(n_d);
+    y = Q_d/Km;
+    Qm_dot = 1/Tm*(-Qm+y*Km);
+    Q_f = 0;
+    
+    n_dot = (1/Im) * (Qm - Q -Q_f);        % should be changed in Part 3
     % store simulation data in a table (for testing)
     simdata(i,:) = [t n_c delta_c n delta eta' nu' u_d psi_d r_d nu_r'];       
      
@@ -261,6 +278,7 @@ for i=1:Ns+1
     n  = euler2(n_dot,n,h);
     cum_error = euler2(eta(3)-xd(1),cum_error,h);
     xd = euler2(xd_dot,xd,h);
+    Qm = euler2(Qm_dot,Qm,h);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -335,11 +353,11 @@ beta = zeros(Ns+1,1);
 for i = 1:Ns+1
     beta(i) = asin(nu_r(i,2)/U_r(i));
 end
-figure(4)
-figure(gcf)
-plot(t, beta, 'linewidth',2);grid on; hold on
-plot(t, betaC, 'linewidth',2);
-legend('sideslip','crabbie');
-title('1b');
+% figure(4)
+% figure(gcf)
+% plot(t, beta, 'linewidth',2);grid on; hold on
+% plot(t, betaC, 'linewidth',2);
+% legend('sideslip','crabbie');
+% title('1b');
 
 
