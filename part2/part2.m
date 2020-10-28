@@ -5,6 +5,7 @@
 
 clear all;
 clc;
+close all;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % USER INPUTS
@@ -108,19 +109,23 @@ N_delta = 0.25 * (xR + aH*xH) * rho * AR * CN;
 Bu = @(u_r,delta) [ (1-t_thr)  -u_r^2 * X_delta2 * delta
                         0      -u_r^2 * Y_delta
                         0      -u_r^2 * N_delta            ];
-b_delta = [-Y_delta; -N_delta];
-%2c: tf
-%[NUM,DEN] = ss2tf(-Minv*N,Minv*b_delta,[0 1],0);
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                    
 % Heading Controller
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+% for controller design. The code below should be modified.
+N_lin = [];
+b_lin = [-2*U_d*Y_delta -2*U_d*N_delta]';
+[NUM,DEN] = ss2tf(-Minv(2:3,2:3)*N(2:3,2:3),Minv(2:3,2:3)*b_lin,[0 1],0);
+
+
 % rudder control law
 wb = 0.06;
 zeta = 1;
 wn = 1 / sqrt( 1 - 2*zeta^2 + sqrt( 4*zeta^4 - 4*zeta^2 + 2) ) * wb;
-K_nomoto = 0.0439;
+K_nomoto = 0.0075; %NUM(3)/DEN(3)
 T_nomoto = 168.2;
 m_reg = T_nomoto/K_nomoto;
 d_reg = 1/K_nomoto;
@@ -128,9 +133,8 @@ Kp = m_reg*wn^2;
 Kd = 2*zeta*wn*m_reg;
 Ki = wn/10*Kp;
 % linearized sway-yaw model (see (7.15)-(7.19) in Fossen (2021)) used
-% for controller design. The code below should be modified.
-N_lin = [];
-b_lin = [-2*U_d*Y_delta -2*U_d*N_delta]';
+
+
 
 % initial states
 eta = [0 0 0]';
@@ -140,6 +144,8 @@ wn_ref = 0.3;
 n = 0;
 xd = [0 0 0]';
 cum_error = 0;
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % MAIN LOOP
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -198,16 +204,16 @@ for i=1:Ns+1
     d = -[Xns Ycf Ncf]';
     
     % reference models
-    psi_d = psi_ref;
+    psi_d = xd(1);
     
-    r_d = 0;
+    r_d = xd(2);
     u_d = U_d;
    
     % thrust 
     thr = rho * Dia^4 * KT * abs(n) * n;    % thrust command (N)
         
     % control law
-    delta_c = -(Kp*(eta(3)-xd(1)) + Ki*cum_error +  Kd*(nu(3)-xd(2)) ) ;              % rudder angle command (rad)
+    delta_c = -(Kp*ssa(eta(3)-xd(1)) + Ki*cum_error +  Kd*ssa(nu(3)-xd(2)) ) ;              % rudder angle command (rad)
     
     % ship dynamics
     u = [ thr delta ]';
