@@ -130,10 +130,6 @@ d_reg = 1/K_nomoto;
 Kp = m_reg*wn^2;
 Kd = 2*zeta*wn*m_reg;
 Ki = wn/10*Kp;
-% linearized sway-yaw model (see (7.15)-(7.19) in Fossen (2021)) used
-% for controller design. The code below should be modified.
-N_lin = [];
-b_lin = [-2*U_d*Y_delta -2*U_d*N_delta]';
 
 % initial states
 eta = [0 0 0]';
@@ -212,8 +208,8 @@ for i=1:Ns+1
     d = -[Xns Ycf Ncf]';
     
     % reference models
-    psi_d = psi_ref;
-    r_d = 0;
+    psi_d = xd(1);
+    r_d = xd(2);
     u_d = U_d;
    
     % thrust 
@@ -281,9 +277,12 @@ title('North-East positions (m)'); xlabel('time (s)');
 subplot(312)
 plot(t,psi,t,psi_d,'linewidth',2);
 title('Actual and desired yaw angles (deg)'); xlabel('time (s)');
+legend('yaw', 'desired yaw');
+
 subplot(313)
 plot(t,r,t,r_d,'linewidth',2);
 title('Actual and desired yaw rates (deg/s)'); xlabel('time (s)');
+legend('r', 'desired r');
 
 figure(2)
 figure(gcf)
