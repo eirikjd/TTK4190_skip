@@ -5,11 +5,7 @@
 
 clear all;
 clc;
-<<<<<<< HEAD:part4/part4.m
 load('WP.mat')
-=======
-
->>>>>>> eda23c1bd5378561995d1e94887c3bfa8fc23845:part2/part2.m
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % USER INPUTS
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -144,7 +140,6 @@ wn_ref = 0.03;
 n = 0;
 xd = [0 0 0]';
 cum_error = 0;
-<<<<<<< HEAD:part4/part4.m
 
 %% Part 3
 Ja = 0;
@@ -160,9 +155,6 @@ t_T = 0.05;
 cur_wp = [WP(1,1), WP(2,1)]; 
 last_wp = cur_wp;
 tell = 1;
-=======
-psi_ref = 0;
->>>>>>> eda23c1bd5378561995d1e94887c3bfa8fc23845:part2/part2.m
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % MAIN LOOP
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -174,12 +166,8 @@ for i=1:Ns+1
         cur_wp = [WP(1,tell), WP(2,tell)];
         disp('byttet')
     end
-<<<<<<< HEAD:part4/part4.m
    
     psi_ref = guidance(cur_wp(1), cur_wp(2), last_wp(1), last_wp(2), eta(1), eta(2), L);
-=======
-    
->>>>>>> eda23c1bd5378561995d1e94887c3bfa8fc23845:part2/part2.m
     Ad = [ 0 1 0
            0 0 1
            -wn_ref^3  -3*wn_ref^2  -3*wn_ref ];
@@ -316,23 +304,6 @@ psi_d   = (180/pi) * simdata(:,13);     % deg
 r_d     = (180/pi) * simdata(:,14);     % deg/s
 nu_r    = [simdata(:,15) simdata(:,16) simdata(:,17)];
 
-<<<<<<< HEAD:part4/part4.m
-=======
-figure(1)
-figure(gcf)
-subplot(311)
-plot(y,x,'linewidth',2); axis('equal')
-title('North-East positions (m)'); xlabel('time (s)'); 
-subplot(312)
-plot(t,psi,t,psi_d,'linewidth',2);
-title('Actual and desired yaw angles (deg)'); xlabel('time (s)');
-legend('yaw', 'desired yaw');
-
-subplot(313)
-plot(t,r,t,r_d,'linewidth',2);
-title('Actual and desired yaw rates (deg/s)'); xlabel('time (s)');
-legend('r', 'desired r');
->>>>>>> eda23c1bd5378561995d1e94887c3bfa8fc23845:part2/part2.m
 
 
 figure(33)
@@ -342,8 +313,6 @@ siz=size(WP);
 for ii=1:(siz(2)-1)   
 plot([WP(2,ii), WP(2,ii+1)], [WP(1,ii), WP(1,ii+1)], 'r-x')
 end
-<<<<<<< HEAD:part4/part4.m
-plot(y,x,'linewidth',2); axis('equal')
 title('North-East positions (m)');
 
 % figure(1)
@@ -408,7 +377,7 @@ title('North-East positions (m)');
 
 
 %%
-% %øving3 
+% %ï¿½ving3 
 % Ja = 0;
 % PD = 1.5;
 % AEAO = 0.65;
@@ -420,21 +389,3 @@ title('North-East positions (m)');
 % T_prop = rho *D_prop^4*KT*n*abs(n);
 % Q_prop = rho *D_prop^4*KQ*n*abs(n);
 % 
-
-
-=======
-betaC = zeros(Ns+1,1);
-for i = 1:Ns+1
-    betaC(i) = atan(v(i)/u(i));
-end
-beta = zeros(Ns+1,1);
-for i = 1:Ns+1
-    beta(i) = asin(nu_r(i,2)/U_r(i));
-end
-figure(4)
-figure(gcf)
-plot(t, beta, 'linewidth',2);grid on; hold on
-plot(t, betaC, 'linewidth',2);
-legend('sideslip','crabbie');
-title('1b');
->>>>>>> eda23c1bd5378561995d1e94887c3bfa8fc23845:part2/part2.m
