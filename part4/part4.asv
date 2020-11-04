@@ -10,7 +10,7 @@ load('WP.mat')
 % USER INPUTS
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 h  = 0.1;    % sampling time [s]
-Ns = 50000;  % no. of samples
+Ns = 89000;  % no. of samples
 
 %psi_ref = 10 * pi/180;  % desired yaw angle (rad)
 %U_d = 7;                % desired cruise speed (m/s)
@@ -162,12 +162,16 @@ tell = 1;
 simdata = zeros(Ns+1,17);                % table of simulation data
 wn_ref = 0.05;
 for i=1:Ns+1
-    eta(3)
-    if(sqrt((eta(1)-next_wp(1))^2+(eta(2)-next_wp(2))^2)<2*L)
+    eta(3) = wrapTo2Pi(eta(3));
+    if(sqrt((eta(1)-next_wp(1))^2+(eta(2)-next_wp(2))^2)<2*L) 
         last_wp = next_wp;
         tell = tell + 1;
+        if (tell > 6)
+            disp(i)
+        else
         next_wp = [WP(1,tell), WP(2,tell)];
         disp('byttet')
+        end
     end
    
     psi_ref = guidance(next_wp(1), next_wp(2), last_wp(1), last_wp(2), eta(1), eta(2), L);
@@ -242,6 +246,9 @@ for i=1:Ns+1
     Ki=0;
     % control law
     delta_c = -(Kp*(eta(3)-xd(1)) + Ki*cum_error +  Kd*(nu(3)-xd(2)) ) ;              % rudder angle command (rad)
+    if abs(d) > u_max                        % saturation
+       u = sign(u) * u_max;          
+   end
     
     % ship dynamics
     u = [ thr delta ]';

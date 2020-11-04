@@ -10,7 +10,7 @@ load('WP.mat')
 % USER INPUTS
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 h  = 0.1;    % sampling time [s]
-Ns = 50000;  % no. of samples
+Ns = 87000;  % no. of samples
 
 %psi_ref = 10 * pi/180;  % desired yaw angle (rad)
 %U_d = 7;                % desired cruise speed (m/s)
@@ -56,7 +56,7 @@ Minv = inv(MRB + MA); % Added mass is included to give the total inertia
 Minv_lin = inv(MRB_lin + MA_lin);
 
 % ocean current in NED
-Vc = 1;                             % current speed (m/s)
+Vc = 0;                             % current speed (m/s)
 betaVc = deg2rad(45);               % current direction (rad)
 
 % wind expressed in NED
@@ -163,11 +163,15 @@ simdata = zeros(Ns+1,17);                % table of simulation data
 wn_ref = 0.05;
 for i=1:Ns+1
     eta(3) = wrapTo2Pi(eta(3));
-    if(sqrt((eta(1)-next_wp(1))^2+(eta(2)-next_wp(2))^2)<2*L)
+    if(sqrt((eta(1)-next_wp(1))^2+(eta(2)-next_wp(2))^2)<2.4*L) 
         last_wp = next_wp;
         tell = tell + 1;
+        if (tell > 6)
+            disp(i)
+        else
         next_wp = [WP(1,tell), WP(2,tell)];
         disp('byttet')
+        end
     end
    
     psi_ref = guidance(next_wp(1), next_wp(2), last_wp(1), last_wp(2), eta(1), eta(2), L);
@@ -239,7 +243,7 @@ for i=1:Ns+1
    
     % thrust 
     thr = rho * Dia^4 * KT * abs(n) * n;    % thrust command (N)
-    Ki=0;
+
     % control law
     delta_c = -(Kp*(eta(3)-xd(1)) + Ki*cum_error +  Kd*(nu(3)-xd(2)) ) ;              % rudder angle command (rad)
     
@@ -251,6 +255,7 @@ for i=1:Ns+1
     
     % Rudder saturation and dynamics (Sections 9.5.2)
     if abs(delta_c) >= delta_max
+        cum_error = cum_error - (h / Ki) * (sign(delta_c)*delta_max - delta_c);
         delta_c = sign(delta_c)*delta_max;
     end
     
@@ -318,34 +323,34 @@ hold on
 for ii=1:(siz(2)-1)   
 plot([WP(2,ii), WP(2,ii+1)], [WP(1,ii), WP(1,ii+1)], 'r-x')
 end
-plot(y,x,'linewidth',2); axis('equal')
+plot(y,x,'linewidth',2); axis('equal'); grid on;
 title('North-East positions (m)');
 
 figure(1)
 figure(gcf)
 subplot(311)
-plot(y,x,'linewidth',2); axis('equal')
+plot(y,x,'linewidth',2); axis('equal'); grid on
 title('North-East positions (m)'); xlabel('time (s)'); 
 subplot(312)
-plot(t,psi,t,psi_d,'linewidth',2);
+plot(t,psi,t,psi_d,'linewidth',2); grid on;
 title('Actual and desired yaw angles (deg)'); xlabel('time (s)');
 legend('yaw', 'desired yaw');
 
 subplot(313)
-plot(t,r,t,r_d,'linewidth',2);
+plot(t,r,t,r_d,'linewidth',2); grid on;
 title('Actual and desired yaw rates (deg/s)'); xlabel('time (s)');
 legend('r', 'desired r');
 
 figure(2)
 figure(gcf)
 subplot(311)
-plot(t,u,t,u_d,'linewidth',2);
+plot(t,u,t,u_d,'linewidth',2); grid on;
 title('Actual and desired surge velocities (m/s)'); xlabel('time (s)');
 subplot(312)
-plot(t,n,t,n_c,'linewidth',2);
+plot(t,n,t,n_c,'linewidth',2); grid on;
 title('Actual and commanded propeller speed (rpm)'); xlabel('time (s)');
 subplot(313)
-plot(t,delta,t,delta_c,'linewidth',2);
+plot(t,delta,t,delta_c,'linewidth',2); grid on;
 title('Actual and commanded rudder angles (deg)'); xlabel('time (s)');
 
 % figure(3) 
