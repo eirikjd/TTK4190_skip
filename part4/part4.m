@@ -10,7 +10,7 @@ load('WP.mat')
 % USER INPUTS
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 h  = 0.1;    % sampling time [s]
-Ns = 82000;  % no. of samples
+Ns = 87000;  % no. of samples
 
 %psi_ref = 10 * pi/180;  % desired yaw angle (rad)
 %U_d = 7;                % desired cruise speed (m/s)
@@ -174,7 +174,7 @@ for i=1:Ns+1
         end
     end
    
-    psi_ref = guidance(next_wp(1), next_wp(2), last_wp(1), last_wp(2), eta(1), eta(2), L);
+    psi_ref = guidance(next_wp(1), next_wp(2), last_wp(1), last_wp(2), eta(1), eta(2), L,nu(1),nu(2));
     %psi_ref = deg2rad(-150);
     
     Ad = [ 0 1 0
