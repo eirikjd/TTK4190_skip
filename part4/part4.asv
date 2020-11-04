@@ -162,7 +162,7 @@ tell = 1;
 simdata = zeros(Ns+1,17);                % table of simulation data
 wn_ref = 0.05;
 for i=1:Ns+1
-    eta(3) = wrapTo2Pi(eta(3));
+    eta(3)
     if(sqrt((eta(1)-next_wp(1))^2+(eta(2)-next_wp(2))^2)<2*L)
         last_wp = next_wp;
         tell = tell + 1;
