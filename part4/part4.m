@@ -10,7 +10,7 @@ load('WP.mat')
 % USER INPUTS
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 h  = 0.1;    % sampling time [s]
-Ns = 87000;  % no. of samples
+Ns = 82000;  % no. of samples
 
 %psi_ref = 10 * pi/180;  % desired yaw angle (rad)
 %U_d = 7;                % desired cruise speed (m/s)
@@ -56,7 +56,7 @@ Minv = inv(MRB + MA); % Added mass is included to give the total inertia
 Minv_lin = inv(MRB_lin + MA_lin);
 
 % ocean current in NED
-Vc = 0;                             % current speed (m/s)
+Vc = 1;                             % current speed (m/s)
 betaVc = deg2rad(45);               % current direction (rad)
 
 % wind expressed in NED
@@ -316,6 +316,7 @@ nu_r    = [simdata(:,15) simdata(:,16) simdata(:,17)];
 
 
 
+
 figure(33)
 figure(gcf)
 siz=size(WP);
@@ -326,32 +327,33 @@ end
 plot(y,x,'linewidth',2); axis('equal'); grid on;
 title('North-East positions (m)');
 
-figure(1)
-figure(gcf)
-subplot(311)
-plot(y,x,'linewidth',2); axis('equal'); grid on
-title('North-East positions (m)'); xlabel('time (s)'); 
-subplot(312)
-plot(t,psi,t,psi_d,'linewidth',2); grid on;
-title('Actual and desired yaw angles (deg)'); xlabel('time (s)');
-legend('yaw', 'desired yaw');
 
-subplot(313)
-plot(t,r,t,r_d,'linewidth',2); grid on;
-title('Actual and desired yaw rates (deg/s)'); xlabel('time (s)');
-legend('r', 'desired r');
-
-figure(2)
-figure(gcf)
-subplot(311)
-plot(t,u,t,u_d,'linewidth',2); grid on;
-title('Actual and desired surge velocities (m/s)'); xlabel('time (s)');
-subplot(312)
-plot(t,n,t,n_c,'linewidth',2); grid on;
-title('Actual and commanded propeller speed (rpm)'); xlabel('time (s)');
-subplot(313)
-plot(t,delta,t,delta_c,'linewidth',2); grid on;
-title('Actual and commanded rudder angles (deg)'); xlabel('time (s)');
+% figure(1)
+% figure(gcf)
+% subplot(311)
+% plot(y,x,'linewidth',2); axis('equal'); grid on
+% title('North-East positions (m)'); xlabel('time (s)'); 
+% subplot(312)
+% plot(t,psi,t,psi_d,'linewidth',2); grid on;
+% title('Actual and desired yaw angles (deg)'); xlabel('time (s)');
+% legend('yaw', 'desired yaw');
+% 
+% subplot(313)
+% plot(t,r,t,r_d,'linewidth',2); grid on;
+% title('Actual and desired yaw rates (deg/s)'); xlabel('time (s)');
+% legend('r', 'desired r');
+% 
+% figure(2)
+% figure(gcf)
+% subplot(311)
+% plot(t,u,t,u_d,'linewidth',2); grid on;
+% title('Actual and desired surge velocities (m/s)'); xlabel('time (s)');
+% subplot(312)
+% plot(t,n,t,n_c,'linewidth',2); grid on;
+% title('Actual and commanded propeller speed (rpm)'); xlabel('time (s)');
+% subplot(313)
+% plot(t,delta,t,delta_c,'linewidth',2); grid on;
+% title('Actual and commanded rudder angles (deg)'); xlabel('time (s)');
 
 % figure(3) 
 % figure(gcf)
@@ -362,29 +364,37 @@ title('Actual and commanded rudder angles (deg)'); xlabel('time (s)');
 % plot(t,v,'linewidth',2);
 % title('Actual sway velocity (m/s)'); xlabel('time (s)');
 % 
-% U_r = zeros(Ns+1,1);
-% disp(size(U_r))
-% for i=1:Ns+1
-%     U_r(i,1)= sqrt(nu_r(i,2)^2 + nu_r(i,1)^2);
-% end
-% U = zeros(Ns+1,1);
-% for i=1:Ns+1
-%     U(i,1)= sqrt(u(i)^2+v(i)^2);
-% end
-% betaC = zeros(Ns+1,1);
-% for i = 1:Ns+1
-%     betaC(i) = atan(v(i)/u(i));
-% end
-% beta = zeros(Ns+1,1);
-% for i = 1:Ns+1
-%     beta(i) = asin(nu_r(i,2)/U_r(i));
-% end
-% figure(4)
-% figure(gcf)
-% plot(t, beta, 'linewidth',2);grid on; hold on
-% plot(t, betaC, 'linewidth',2);
-% legend('sideslip','crabbie');
-% title('1b');
+U_r = zeros(Ns+1,1);
+disp(size(U_r))
+for i=1:Ns+1
+    U_r(i,1)= sqrt(nu_r(i,2)^2 + nu_r(i,1)^2);
+end
+U = zeros(Ns+1,1);
+for i=1:Ns+1
+    U(i,1)= sqrt(u(i)^2+v(i)^2);
+end
+betaC = zeros(Ns+1,1);
+chi = zeros(Ns+1,1);
+for i = 1:Ns+1
+    betaC(i) = rad2deg((atan(v(i)/u(i))));
+    chi(i) = betaC(i) + psi(i);
+end
+beta = zeros(Ns+1,1);
+for i = 1:Ns+1
+    beta(i) = rad2deg(asin(nu_r(i,2)/U_r(i)));
+end
+figure(4)
+figure(gcf)
+plot(t, beta, 'linewidth',2);grid on; hold on
+plot(t, betaC, 'linewidth',2);
+legend('sideslip','crabbie');
+title('sidelsipcrab');
+
+figure(5)
+figure(gcf)
+plot(t, psi_d,t,psi,t,chi,'linewidth',2); grid on;
+legend('chi_d','psi','chi');
+title('2b')
 % 
 
 %%
