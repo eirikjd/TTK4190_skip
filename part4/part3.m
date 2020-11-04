@@ -3,8 +3,8 @@
 % Author:           My name
 % Study program:    My study program
 
-clear all;
-clc;
+%clear all;
+close all;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % USER INPUTS
@@ -13,8 +13,8 @@ h  = 0.1;    % sampling time [s]
 Ns = 10000;  % no. of samples
 
 psi_ref = 10 * pi/180;  % desired yaw angle (rad)
-%U_d = 7;                % desired cruise speed (m/s)
-U_d = 9;                % desired cruise speed (m/s)
+U_d = 7;                % desired cruise speed (m/s)
+
                
 % ship parameters 
 m = 17.0677e6;          % mass (kg)
@@ -30,6 +30,7 @@ visc = 1e-6;            % kinematic viscousity at 20 degrees (m/s^2)
 eps = 0.001;            % a small number added to ensure that the denominator of Cf is well defined at u=0
 k = 0.1;                % form factor giving a viscous correction
 t_thr = 0.05;           % thrust deduction number
+K_p_wp = pi * L;
 
 % rudder limitations
 delta_max  = 40 * pi/180;        % max rudder angle      (rad)
@@ -44,16 +45,15 @@ Nrdot = -2.4283e10;
 MA = -[ Xudot 0    0 
         0 Yvdot Yrdot
         0 Nvdot Nrdot ];
-MA_lin = MA(2:3,2:3);
+%MA = MA(2:3,2:3);
 
 % rigid-body mass matrix
 MRB = [ m 0    0 
         0 m    m*xg
         0 m*xg Iz ];
-MRB_lin = MRB(2:3,2:3);
+%MRB = MRB(2:3,2:3);
     
 Minv = inv(MRB + MA); % Added mass is included to give the total inertia
-Minv_lin = inv(MRB_lin + MA_lin);
 
 % ocean current in NED
 Vc = 1;                             % current speed (m/s)
@@ -75,18 +75,20 @@ Xu = -(m - Xudot) / T1;
 Yv = -(m - Yvdot) / T2;
 Nr = -(Iz - Nrdot)/ T6;
 D = diag([-Xu -Yv -Nr]);         % zero speed linear damping
-D_lin = D(2:3,2:3);
+%D = D(2:3,2:3);
 
 %Linearized coriolis matrices
-CRB_lin = [ 0 0 0 
+CRB = [ 0 0 0 
     0  0  m*U_d
     0 0  m*xg*U_d];
-CRB_lin = CRB_lin(2:3,2:3);
+%CRB = CRB(2:3,2:3);
 % coriolis due to added mass
-CA_lin = [  0   0   0
+CA = [  0   0   0
         0   0   -Xudot*U_d 
       0    (Xudot-Yvdot)*U_d -Yrdot*U_d];
-CA_lin = CA_lin(2:3,2:3);
+%CA = CA(2:3,2:3);
+
+N = CRB + CA + D;
 
 % rudder coefficients (Section 9.5)
 b = 2;
@@ -108,13 +110,9 @@ N_delta = 0.25 * (xR + aH*xH) * rho * AR * CN;
 Bu = @(u_r,delta) [ (1-t_thr)  -u_r^2 * X_delta2 * delta
                         0      -u_r^2 * Y_delta
                         0      -u_r^2 * N_delta            ];
-
-% linearized sway-yaw model (see (7.15)-(7.19) in Fossen (2021)) used
-% for controller design. The code below should be modified.
-N_lin = CRB_lin + CA_lin + D_lin;
-b_lin = [-2*U_d*Y_delta -2*U_d*N_delta]';
+b_delta = [-Y_delta; -N_delta];
 %2c: tf
-[NUM,DEN] = ss2tf(-Minv_lin*N_lin,Minv_lin*b_lin,[0 1],0);
+%[NUM,DEN] = ss2tf(-Minv*N,Minv*b_delta,[0 1],0);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                    
 % Heading Controller
@@ -124,46 +122,47 @@ b_lin = [-2*U_d*Y_delta -2*U_d*N_delta]';
 wb = 0.06;
 zeta = 1;
 wn = 1 / sqrt( 1 - 2*zeta^2 + sqrt( 4*zeta^4 - 4*zeta^2 + 2) ) * wb;
-K_nomoto = NUM(3)/DEN(3);
-T_nomoto = DEN(2)/DEN(3) - NUM(2)/(K_nomoto*DEN(3));%168.2;
+K_nomoto = 0.0439;
+T_nomoto = 168.2;
 m_reg = T_nomoto/K_nomoto;
 d_reg = 1/K_nomoto;
 Kp = m_reg*wn^2;
 Kd = 2*zeta*wn*m_reg;
 Ki = wn/10*Kp;
+% linearized sway-yaw model (see (7.15)-(7.19) in Fossen (2021)) used
+% for controller design. The code below should be modified.
+N_lin = [];
+b_lin = [-2*U_d*Y_delta -2*U_d*N_delta]';
 
 % initial states
 eta = [0 0 0]';
 nu  = [0.1 0 0]';
 delta = 0;
-wn_ref = 0.03;
+wn_ref = 0.3;
 n = 0;
 xd = [0 0 0]';
 cum_error = 0;
-
-%% Part 3
-Ja = 0;
-PD = 1.5;
-AEAO = 0.65;
-z = 4;
-[KT,KQ] = wageningen(Ja,PD,AEAO,z);
-
-Qm = 0;
-
-t_T = 0.05;
-
-
-
+cur_wp = [WP(1,1), WP(2,1)]; 
+last_wp = cur_wp;
+tell = 1;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % MAIN LOOP
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 simdata = zeros(Ns+1,17);                % table of simulation data
 for i=1:Ns+1
-    if(i/10 > 500)
-        psi_ref = -20*pi/180;
-    else
-        psi_ref = 10*pi/180;
+%     if(i/10 > 500)
+%         psi_ref = -20*pi/180;
+%     else
+%         psi_ref = 10*pi/180;
+%     end
+    if(sqrt((eta(1)-cur_wp(1))^2+(eta(2)-cur_wp(2))^2)<2*L)
+        last_wp = cur_wp;
+        tell = tell + 1;
+        cur_wp = [WP(1,tell), WP(2,tell)];
+        disp('byttet')
     end
+   
+    psi_ref = guidance(cur_wp(1), cur_wp(2), last_wp(1), last_wp(2), eta(1), eta(2), L);
     Ad = [ 0 1 0
            0 0 1
            -wn_ref^3  -3*wn_ref^2  -3*wn_ref ];
@@ -174,7 +173,6 @@ for i=1:Ns+1
     
     % current (should be added here)
     nu_r = nu - [Vc*cos(betaVc), Vc*sin(betaVc), 0]' ;
-    u_c = Vc*cos(betaVc);
   
     
     gamma_w = eta(3)-betaVw-pi;
@@ -192,17 +190,6 @@ for i=1:Ns+1
         Nwind = 0;
     end
     tau_env = [0 Ywind Nwind]';
-    
-    % state-dependent time-varying matrices
-    CRB = m * nu(3) * [ 0 -1 -xg 
-                        1  0  0 
-                        xg 0  0  ];
-                    
-    % coriolis due to added mass
-    CA = [  0   0   Yvdot * nu_r(2) + Yrdot * nu_r(3)
-            0   0   -Xudot * nu_r(1) 
-          -Yvdot * nu_r(2) - Yrdot * nu_r(3)    Xudot * nu_r(1)   0];
-    N = CRB + CA + D;
     
     % nonlinear surge damping
     Rn = L/visc * abs(nu_r(1));
@@ -224,8 +211,9 @@ for i=1:Ns+1
     d = -[Xns Ycf Ncf]';
     
     % reference models
-    psi_d = xd(1);
-    r_d = xd(2);
+    psi_d = psi_ref;
+    
+    r_d = 0;
     u_d = U_d;
    
     % thrust 
@@ -250,24 +238,10 @@ for i=1:Ns+1
         delta_dot = sign(delta_dot)*Ddelta_max;
     end    
     
-    
-    
     % propeller dynamics
     Im = 100000; Tm = 10; Km = 0.6;         % propulsion parameters
-    %Hs = Km / (Tm*s+1);
     n_c = 10;                               % propeller speed (rps)
-    
-    %prop control
-    T_prop = rho *Dia^4*KT*n*abs(n);
-    Q = rho *Dia^5*KQ*n*abs(n);
-    T_d = (U_d-u_c)*Xu / (t_T-1); % t = i?
-    n_d = sign(T_d)*sqrt(abs(T_d) / (rho*Dia^4*KT));
-    Q_d = rho *Dia^5*KQ*n_d*abs(n_d);
-    y = Q_d/Km;
-    Qm_dot = 1/Tm*(-Qm+y*Km);
-    Q_f = 0;
-    
-    n_dot = (1/Im) * (Qm - Q -Q_f);        % should be changed in Part 3
+    n_dot = (1/10) * (n_c - n);             % should be changed in Part 3
     % store simulation data in a table (for testing)
     simdata(i,:) = [t n_c delta_c n delta eta' nu' u_d psi_d r_d nu_r'];       
      
@@ -278,7 +252,6 @@ for i=1:Ns+1
     n  = euler2(n_dot,n,h);
     cum_error = euler2(eta(3)-xd(1),cum_error,h);
     xd = euler2(xd_dot,xd,h);
-    Qm = euler2(Qm_dot,Qm,h);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -300,59 +273,63 @@ psi_d   = (180/pi) * simdata(:,13);     % deg
 r_d     = (180/pi) * simdata(:,14);     % deg/s
 nu_r    = [simdata(:,15) simdata(:,16) simdata(:,17)];
 
-figure(1)
+% figure(1)
+% figure(gcf)
+% subplot(211)
+% plot(t,psi,t,psi_d,'linewidth',2);
+% title('Actual and desired yaw angles (deg)'); xlabel('time (s)');
+% subplot(212)
+% plot(t,r,t,r_d,'linewidth',2);
+% title('Actual and desired yaw rates (deg/s)'); xlabel('time (s)');
+
+figure(55)
 figure(gcf)
-subplot(311)
+title('NED')
 plot(y,x,'linewidth',2); axis('equal')
-title('North-East positions (m)'); xlabel('time (s)'); 
-subplot(312)
-plot(t,psi,t,psi_d,'linewidth',2);
-title('Actual and desired yaw angles (deg)'); xlabel('time (s)');
-legend('yaw', 'desired yaw');
-
-subplot(313)
-plot(t,r,t,r_d,'linewidth',2);
-title('Actual and desired yaw rates (deg/s)'); xlabel('time (s)');
-legend('r', 'desired r');
-
-figure(2)
-figure(gcf)
-subplot(311)
-plot(t,u,t,u_d,'linewidth',2);
-title('Actual and desired surge velocities (m/s)'); xlabel('time (s)');
-subplot(312)
-plot(t,n,t,n_c,'linewidth',2);
-title('Actual and commanded propeller speed (rpm)'); xlabel('time (s)');
-subplot(313)
-plot(t,delta,t,delta_c,'linewidth',2);
-title('Actual and commanded rudder angles (deg)'); xlabel('time (s)');
-
-figure(3) 
-figure(gcf)
-subplot(211)
-plot(t,u,'linewidth',2);
-title('Actual surge velocity (m/s)'); xlabel('time (s)');
-subplot(212)
-plot(t,v,'linewidth',2);
-title('Actual sway velocity (m/s)'); xlabel('time (s)');
-
-U_r = zeros(Ns+1,1);
-disp(size(U_r))
-for i=1:Ns+1
-    U_r(i,1)= sqrt(nu_r(i,2)^2 + nu_r(i,1)^2);
-end
-U = zeros(Ns+1,1);
-for i=1:Ns+1
-    U(i,1)= sqrt(u(i)^2+v(i)^2);
-end
-betaC = zeros(Ns+1,1);
-for i = 1:Ns+1
-    betaC(i) = atan(v(i)/u(i));
-end
-beta = zeros(Ns+1,1);
-for i = 1:Ns+1
-    beta(i) = asin(nu_r(i,2)/U_r(i));
-end
+hold on 
+plot(WP(1,:),WP(2,:),'linewidth',1)
+legend('actual pos', 'wp')
+% 
+% 
+% 
+% figure(2)
+% figure(gcf)
+% subplot(311)
+% plot(t,u,t,u_d,'linewidth',2);
+% title('Actual and desired surge velocities (m/s)'); xlabel('time (s)');
+% subplot(312)
+% plot(t,n,t,n_c,'linewidth',2);
+% title('Actual and commanded propeller speed (rpm)'); xlabel('time (s)');
+% subplot(313)
+% plot(t,delta,t,delta_c,'linewidth',2);
+% title('Actual and commanded rudder angles (deg)'); xlabel('time (s)');
+% 
+% figure(3) 
+% figure(gcf)
+% subplot(211)
+% plot(t,u,'linewidth',2);
+% title('Actual surge velocity (m/s)'); xlabel('time (s)');
+% subplot(212)
+% plot(t,v,'linewidth',2);
+% title('Actual sway velocity (m/s)'); xlabel('time (s)');
+% 
+% U_r = zeros(Ns+1,1);
+% disp(size(U_r))
+% for i=1:Ns+1
+%     U_r(i,1)= sqrt(nu_r(i,2)^2 + nu_r(i,1)^2);
+% end
+% U = zeros(Ns+1,1);
+% for i=1:Ns+1
+%     U(i,1)= sqrt(u(i)^2+v(i)^2);
+% end
+% betaC = zeros(Ns+1,1);
+% for i = 1:Ns+1
+%     betaC(i) = atan(v(i)/u(i));
+% end
+% beta = zeros(Ns+1,1);
+% for i = 1:Ns+1
+%     beta(i) = asin(nu_r(i,2)/U_r(i));
+% end
 % figure(4)
 % figure(gcf)
 % plot(t, beta, 'linewidth',2);grid on; hold on
