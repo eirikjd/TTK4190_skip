@@ -168,6 +168,8 @@ for i=1:Ns+1
     end
    
     psi_ref = guidance(cur_wp(1), cur_wp(2), last_wp(1), last_wp(2), eta(1), eta(2), L);
+    
+    
     Ad = [ 0 1 0
            0 0 1
            -wn_ref^3  -3*wn_ref^2  -3*wn_ref ];
