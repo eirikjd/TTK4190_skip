@@ -156,61 +156,53 @@ cur_wp = [WP(1,1), WP(2,1)];
 next_wp = [WP(1,2), WP(2,2)]; 
 last_wp = cur_wp;
 tell = 1;
-%% part 5
 
+%% Part 5
 x0 = [0 0 0]'; x_prd = x0; % initialization
 P0 = eye(3);
 P_prd = P0;
 Qd = diag([1 1]); % covariance matrices
 Rd = 1;
-A = [ 0 1 0
+Ak = [ 0 1 0
     0 -1/T_nomoto -K_nomoto/T_nomoto
     0 0 0 ];
-B = [0 K_nomoto/T_nomoto 0]';
-C = [1 0 0];
-E = [0 0; 1 0; 0 1];
+Bk = [0 K_nomoto/T_nomoto 0]';
+Ck = [1 0 0];
+Ek = [0 0; 1 0; 0 1];
 
-Adk = eye(3) + h * A; Bdk = h * B; % discrete-time KF model
-Cdk = C; Edk = h * E;
+Adk = eye(3) + h * Ak; Bdk = h * Bk; % discrete-time KF model
+Cdk = Ck; Edk = h * Ek;
+disp(rank(obsv(Ak,Ck)))
 
-disp(rank(obsv(A,C)))
-
-
+noise_heading = normrnd(0,deg2rad(0.5),1,Ns+1);
+noise_yaw_rate = normrnd(0,deg2rad(0.1),1,Ns+1);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % MAIN LOOP
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-simdata = zeros(Ns+1,21);                % table of simulation data
+simdata = zeros(Ns+1,17);                % table of simulation data
 wn_ref = 0.05;
-noise_heading = normrnd(0,deg2rad(0.5),1,Ns+1);
-noise_yaw_rate = normrnd(0,deg2rad(0.1),1,Ns+1);
 for i=1:Ns+1
-    eta(3) = wrapTo2Pi(eta(3));
-    yaw_copy = eta(3);
-    eta(3) = eta(3) + noise_heading(i);
-    yaw_rate_copy = nu(3);
+    eta(3) = wrapTo2Pi(eta(3)) + noise_heading(i);
     nu(3) = nu(3) + noise_yaw_rate(i);
-    yaw_noise = eta(3) + noise_heading(i);
-    yaw_rate_noise = nu(3) + noise_yaw_rate(i);
     
     K = P_prd * Cdk'/( Cdk * P_prd * Cdk' + Rd ); % inv (cdaødkfj)
     IKC = eye(3) - K * Cdk;
     % Control input and measurement: u[k] and y[k]
-    u = delta; % control system
-    y = eta(3);
+    udk = delta; % control system
+    ydk = eta(3);
     % Corrector: x_hat[k] and P_hat[k]
-    x_hat = x_prd + K * ssa( y - Cdk * x_prd ); % ssa modification
+    x_hat = x_prd + K * ssa( ydk - Cdk * x_prd ); % ssa modification
     P_hat = IKC * P_prd * IKC' + K * Rd * K';
     % Predictor: x_prd[k+1] and P_prd[k+1]
-    x_prd = Adk * x_hat + Bdk * u;
+    x_prd = Adk * x_hat + Bdk * udk;
     P_prd = Adk * P_hat * Adk' + Edk * Qd * Edk';
     
     %add estimated states
     eta(3) = x_hat(1);
     nu(3) = x_hat(2);
     delta = delta - x_hat(3);
-    % Ship-wave simulator: x[k+1]
-
+    
     if(sqrt((eta(1)-next_wp(1))^2+(eta(2)-next_wp(2))^2)<2.4*L) 
         last_wp = next_wp;
         tell = tell + 1;
@@ -221,7 +213,7 @@ for i=1:Ns+1
         disp('byttet')
         end
     end
-    
+   
     psi_ref = guidance(next_wp(1), next_wp(2), last_wp(1), last_wp(2), eta(1), eta(2), L,nu(1),nu(2));
     %psi_ref = deg2rad(-150);
     
@@ -331,7 +323,7 @@ for i=1:Ns+1
     
     n_dot = (1/Im) * (Qm - Q -Q_f);        % should be changed in Part 3
     % store simulation data in a table (for testing)
-    simdata(i,:) = [t n_c delta_c n delta eta' nu' u_d psi_d r_d nu_r' yaw_copy yaw_rate_copy yaw_noise yaw_rate_noise];       
+    simdata(i,:) = [t n_c delta_c n delta eta' nu' u_d psi_d r_d nu_r'];       
      
     % Euler integration
     eta = euler2(eta_dot,eta,h);
@@ -361,21 +353,6 @@ u_d     = simdata(:,12);                % m/s
 psi_d   = (180/pi) * simdata(:,13);     % deg
 r_d     = (180/pi) * simdata(:,14);     % deg/s
 nu_r    = [simdata(:,15) simdata(:,16) simdata(:,17)];
-yaw_copy = (180/pi)*simdata(:,18);
-yaw_rate_copy = (180/pi)*simdata(:,19);
-yaw_noise = (180/pi)*simdata(:,20);
-yaw_rate_noise = (180/pi)*simdata(:,21);
-
-figure(69)
-figure(gcf)
-subplot(211)
-plot(t,yaw_noise,t,yaw_copy,'linewidth',2); grid on;
-legend('measured psi', 'real psi');
-subplot(212)
-plot(t,yaw_rate_noise,t,yaw_rate_copy,'linewidth',2); grid on;
-legend(' measured r', ' real r');
-title('measured vs real yaw and rate'); xlabel('time (s)');
-
 
 
 
@@ -427,38 +404,38 @@ title('North-East positions (m)');
 % plot(t,v,'linewidth',2);
 % title('Actual sway velocity (m/s)'); xlabel('time (s)');
 % 
-% U_r = zeros(Ns+1,1);
-% disp(size(U_r))
-% for i=1:Ns+1
-%     U_r(i,1)= sqrt(nu_r(i,2)^2 + nu_r(i,1)^2);
-% end
-% U = zeros(Ns+1,1);
-% for i=1:Ns+1
-%     U(i,1)= sqrt(u(i)^2+v(i)^2);
-% end
-% betaC = zeros(Ns+1,1);
-% chi = zeros(Ns+1,1);
-% for i = 1:Ns+1
-%     betaC(i) = rad2deg((atan(v(i)/u(i))));
-%     chi(i) = betaC(i) + psi(i);
-% end
-% beta = zeros(Ns+1,1);
-% for i = 1:Ns+1
-%     beta(i) = rad2deg(asin(nu_r(i,2)/U_r(i)));
-% end
-% figure(4)
-% figure(gcf)
-% plot(t, beta, 'linewidth',2);grid on; hold on
-% plot(t, betaC, 'linewidth',2);
-% legend('sideslip','crabbie');
-% title('sidelsipcrab');
+U_r = zeros(Ns+1,1);
+disp(size(U_r))
+for i=1:Ns+1
+    U_r(i,1)= sqrt(nu_r(i,2)^2 + nu_r(i,1)^2);
+end
+U = zeros(Ns+1,1);
+for i=1:Ns+1
+    U(i,1)= sqrt(u(i)^2+v(i)^2);
+end
+betaC = zeros(Ns+1,1);
+chi = zeros(Ns+1,1);
+for i = 1:Ns+1
+    betaC(i) = rad2deg((atan(v(i)/u(i))));
+    chi(i) = betaC(i) + psi(i);
+end
+beta = zeros(Ns+1,1);
+for i = 1:Ns+1
+    beta(i) = rad2deg(asin(nu_r(i,2)/U_r(i)));
+end
+figure(4)
+figure(gcf)
+plot(t, beta, 'linewidth',2);grid on; hold on
+plot(t, betaC, 'linewidth',2);
+legend('sideslip','crabbie');
+title('sidelsipcrab');
+
+figure(5)
+figure(gcf)
+plot(t, psi_d,t,psi,t,chi,'linewidth',2); grid on;
+legend('chi_d','psi','chi');
+title('2b')
 % 
-% figure(5)
-% figure(gcf)
-% plot(t, psi_d,t,psi,t,chi,'linewidth',2); grid on;
-% legend('chi_d','psi','chi');
-% title('2b')
-% % 
 
 %%
 % %ï¿½ving3 
@@ -473,21 +450,3 @@ title('North-East positions (m)');
 % T_prop = rho *D_prop^4*KT*n*abs(n);
 % Q_prop = rho *D_prop^4*KQ*n*abs(n);
 % 
-
-%% part 5.del 2
-x0 = [0 0 0]'; x_prd = x0; % initialization
-P0 = eye(3);
-P_prd = P0;
-Qd = diag([1 1 1]); % covariance matrices
-Rd = 1;
-A = [ 0 1 0
-    0 -1/T_nomoto -K_nomoto/T_nomoto
-    0 0 0 ];
-B = [0 K_nomoto/T_nomoto 0]';
-C = [1 0 0];
-E = [0 0; 1 0; 0 1];
-
-Ad = eye(3) + h * A; Bd = h * B; % discrete-time KF model
-Cd = C; Ed = h * E;
-
-disp(rank(obsv(A,C)))
