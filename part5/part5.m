@@ -2,7 +2,6 @@
 %
 % Author:           My name
 % Study program:    My study program
-
 clear all;
 close all;
 load('WP.mat')
@@ -159,10 +158,10 @@ tell = 1;
 
 %% Part 5
 x0 = [0 0 0]'; x_prd = x0; % initialization
-P0 = eye(3);
+P0 = eye(3)*1e-2;
 P_prd = P0;
-Qd = diag([1 1]); % covariance matrices
-Rd = 1;
+Qd = diag([deg2rad(0.5)^2 deg2rad(0.1)^2]); % covariance matrices
+Rd = 1e-2;
 Ak = [ 0 1 0
     0 -1/T_nomoto -K_nomoto/T_nomoto
     0 0 0 ];
@@ -180,17 +179,18 @@ noise_yaw_rate = normrnd(0,deg2rad(0.1),1,Ns+1);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % MAIN LOOP
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-simdata = zeros(Ns+1,17);                % table of simulation data
+simdata = zeros(Ns+1,20);                % table of simulation data
 wn_ref = 0.05;
 for i=1:Ns+1
-    eta(3) = wrapTo2Pi(eta(3)) + noise_heading(i);
-    nu(3) = nu(3) + noise_yaw_rate(i);
-    
+    eta(3) = wrapTo2Pi(eta(3));
+    psi_meas = eta(3)+ noise_heading(i);
+    r_meas = nu(3) + noise_yaw_rate(i);
+  
     K = P_prd * Cdk'/( Cdk * P_prd * Cdk' + Rd ); % inv (cdaødkfj)
     IKC = eye(3) - K * Cdk;
     % Control input and measurement: u[k] and y[k]
     udk = delta; % control system
-    ydk = eta(3);
+    ydk = psi_meas;
     % Corrector: x_hat[k] and P_hat[k]
     x_hat = x_prd + K * ssa( ydk - Cdk * x_prd ); % ssa modification
     P_hat = IKC * P_prd * IKC' + K * Rd * K';
@@ -198,10 +198,13 @@ for i=1:Ns+1
     x_prd = Adk * x_hat + Bdk * udk;
     P_prd = Adk * P_hat * Adk' + Edk * Qd * Edk';
     
+    psi_est = x_hat(1);
+    r_est = x_hat(2);
     %add estimated states
-    eta(3) = x_hat(1);
-    nu(3) = x_hat(2);
-    delta = delta - x_hat(3);
+    %eta(3) = x_hat(1);
+    %nu(3) = x_hat(2);
+    delta_est = delta - x_hat(3);
+    delta = delta_est;
     
     if(sqrt((eta(1)-next_wp(1))^2+(eta(2)-next_wp(2))^2)<2.4*L) 
         last_wp = next_wp;
@@ -285,7 +288,7 @@ for i=1:Ns+1
     thr = rho * Dia^4 * KT * abs(n) * n;    % thrust command (N)
 
     % control law
-    delta_c = -(Kp*(eta(3)-xd(1)) + Ki*cum_error +  Kd*(nu(3)-xd(2)) ) ;              % rudder angle command (rad)
+    delta_c = -(Kp*(psi_est-xd(1)) + Ki*cum_error +  Kd*(r_est-xd(2)) ) ;              % rudder angle command (rad)
     
     % ship dynamics
     u = [ thr delta ]';
@@ -323,7 +326,7 @@ for i=1:Ns+1
     
     n_dot = (1/Im) * (Qm - Q -Q_f);        % should be changed in Part 3
     % store simulation data in a table (for testing)
-    simdata(i,:) = [t n_c delta_c n delta eta' nu' u_d psi_d r_d nu_r'];       
+    simdata(i,:) = [t n_c delta_c n delta eta' nu' u_d psi_d r_d nu_r' x_hat'];       
      
     % Euler integration
     eta = euler2(eta_dot,eta,h);
@@ -353,7 +356,21 @@ u_d     = simdata(:,12);                % m/s
 psi_d   = (180/pi) * simdata(:,13);     % deg
 r_d     = (180/pi) * simdata(:,14);     % deg/s
 nu_r    = [simdata(:,15) simdata(:,16) simdata(:,17)];
-
+psi_meas=(180/pi)*simdata(:,18);
+r_meas  = (180/pi)*simdata(:,19) ;
+bias    = (180/pi)*simdata(:,20);
+disp('hei')
+figure(69)
+figure(gcf)
+subplot(311)
+plot(t,psi,t,psi_meas,'linewidth',2); grid on;
+legend('real psi','estimated psi');
+title('estimated  vs real')
+subplot(312)
+plot(t,r,t,r_meas,'linewidth',2); grid on;
+legend('real r','estimated r');
+subplot(313)
+plot(t,bias);grid on;
 
 
 
@@ -367,7 +384,7 @@ end
 plot(y,x,'linewidth',2); axis('equal'); grid on;
 title('North-East positions (m)');
 
-
+% 
 % figure(1)
 % figure(gcf)
 % subplot(311)
@@ -377,23 +394,22 @@ title('North-East positions (m)');
 % plot(t,psi,t,psi_d,'linewidth',2); grid on;
 % title('Actual and desired yaw angles (deg)'); xlabel('time (s)');
 % legend('yaw', 'desired yaw');
-% 
 % subplot(313)
 % plot(t,r,t,r_d,'linewidth',2); grid on;
 % title('Actual and desired yaw rates (deg/s)'); xlabel('time (s)');
 % legend('r', 'desired r');
-% 
-% figure(2)
-% figure(gcf)
-% subplot(311)
-% plot(t,u,t,u_d,'linewidth',2); grid on;
-% title('Actual and desired surge velocities (m/s)'); xlabel('time (s)');
-% subplot(312)
-% plot(t,n,t,n_c,'linewidth',2); grid on;
-% title('Actual and commanded propeller speed (rpm)'); xlabel('time (s)');
-% subplot(313)
-% plot(t,delta,t,delta_c,'linewidth',2); grid on;
-% title('Actual and commanded rudder angles (deg)'); xlabel('time (s)');
+% % 
+figure(2)
+figure(gcf)
+subplot(311)
+plot(t,u,t,u_d,'linewidth',2); grid on;
+title('Actual and desired surge velocities (m/s)'); xlabel('time (s)');
+subplot(312)
+plot(t,n,t,n_c,'linewidth',2); grid on;
+title('Actual and commanded propeller speed (rpm)'); xlabel('time (s)');
+subplot(313)
+plot(t,delta,t,delta_c,'linewidth',2); grid on;
+title('Actual and commanded rudder angles (deg)'); xlabel('time (s)');
 
 % figure(3) 
 % figure(gcf)
@@ -404,38 +420,38 @@ title('North-East positions (m)');
 % plot(t,v,'linewidth',2);
 % title('Actual sway velocity (m/s)'); xlabel('time (s)');
 % 
-U_r = zeros(Ns+1,1);
-disp(size(U_r))
-for i=1:Ns+1
-    U_r(i,1)= sqrt(nu_r(i,2)^2 + nu_r(i,1)^2);
-end
-U = zeros(Ns+1,1);
-for i=1:Ns+1
-    U(i,1)= sqrt(u(i)^2+v(i)^2);
-end
-betaC = zeros(Ns+1,1);
-chi = zeros(Ns+1,1);
-for i = 1:Ns+1
-    betaC(i) = rad2deg((atan(v(i)/u(i))));
-    chi(i) = betaC(i) + psi(i);
-end
-beta = zeros(Ns+1,1);
-for i = 1:Ns+1
-    beta(i) = rad2deg(asin(nu_r(i,2)/U_r(i)));
-end
-figure(4)
-figure(gcf)
-plot(t, beta, 'linewidth',2);grid on; hold on
-plot(t, betaC, 'linewidth',2);
-legend('sideslip','crabbie');
-title('sidelsipcrab');
-
-figure(5)
-figure(gcf)
-plot(t, psi_d,t,psi,t,chi,'linewidth',2); grid on;
-legend('chi_d','psi','chi');
-title('2b')
+% U_r = zeros(Ns+1,1);
+% disp(size(U_r))
+% for i=1:Ns+1
+%     U_r(i,1)= sqrt(nu_r(i,2)^2 + nu_r(i,1)^2);
+% end
+% U = zeros(Ns+1,1);
+% for i=1:Ns+1
+%     U(i,1)= sqrt(u(i)^2+v(i)^2);
+% end
+% betaC = zeros(Ns+1,1);
+% chi = zeros(Ns+1,1);
+% for i = 1:Ns+1
+%     betaC(i) = rad2deg((atan(v(i)/u(i))));
+%     chi(i) = betaC(i) + psi(i);
+% end
+% beta = zeros(Ns+1,1);
+% for i = 1:Ns+1
+%     beta(i) = rad2deg(asin(nu_r(i,2)/U_r(i)));
+% end
+% figure(4)
+% figure(gcf)
+% plot(t, beta, 'linewidth',2);grid on; hold on
+% plot(t, betaC, 'linewidth',2);
+% legend('sideslip','crabbie');
+% title('sidelsipcrab');
 % 
+% figure(5)
+% figure(gcf)
+% plot(t, psi_d,t,psi,t,chi,'linewidth',2); grid on;
+% legend('chi_d','psi','chi');
+% title('2b')
+% % 
 
 %%
 % %ï¿½ving3 
