@@ -158,7 +158,22 @@ last_wp = cur_wp;
 tell = 1;
 %% part 5
 
+x0 = [0 0 0]'; x_prd = x0; % initialization
+P0 = eye(3);
+P_prd = P0;
+Qd = diag([1 1]); % covariance matrices
+Rd = 1;
+A = [ 0 1 0
+    0 -1/T_nomoto -K_nomoto/T_nomoto
+    0 0 0 ];
+B = [0 K_nomoto/T_nomoto 0]';
+C = [1 0 0];
+E = [0 0; 1 0; 0 1];
 
+Adk = eye(3) + h * A; Bdk = h * B; % discrete-time KF model
+Cdk = C; Edk = h * E;
+
+disp(rank(obsv(A,C)))
 
 
 
@@ -172,11 +187,30 @@ noise_yaw_rate = normrnd(0,deg2rad(0.1),1,Ns+1);
 for i=1:Ns+1
     eta(3) = wrapTo2Pi(eta(3));
     yaw_copy = eta(3);
-    %eta(3) = eta(3) + noise_heading(i);
+    eta(3) = eta(3) + noise_heading(i);
     yaw_rate_copy = nu(3);
-    %nu(3) = nu(3) + noise_yaw_rate(i);
+    nu(3) = nu(3) + noise_yaw_rate(i);
     yaw_noise = eta(3) + noise_heading(i);
     yaw_rate_noise = nu(3) + noise_yaw_rate(i);
+    
+    K = P_prd * Cdk'/( Cdk * P_prd * Cdk' + Rd ); % inv (cdaødkfj)
+    IKC = eye(3) - K * Cdk;
+    % Control input and measurement: u[k] and y[k]
+    u = delta; % control system
+    y = eta(3);
+    % Corrector: x_hat[k] and P_hat[k]
+    x_hat = x_prd + K * ssa( y - Cdk * x_prd ); % ssa modification
+    P_hat = IKC * P_prd * IKC' + K * Rd * K';
+    % Predictor: x_prd[k+1] and P_prd[k+1]
+    x_prd = Adk * x_hat + Bdk * u;
+    P_prd = Adk * P_hat * Adk' + Edk * Qd * Edk';
+    
+    %add estimated states
+    eta(3) = x_hat(1);
+    nu(3) = x_hat(2);
+    delta = delta - x_hat(3);
+    % Ship-wave simulator: x[k+1]
+
     if(sqrt((eta(1)-next_wp(1))^2+(eta(2)-next_wp(2))^2)<2.4*L) 
         last_wp = next_wp;
         tell = tell + 1;
